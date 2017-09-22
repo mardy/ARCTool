@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import binascii
 import struct
 import sys
 import os
@@ -76,12 +77,15 @@ class rarc_header_class:
 
 
 class rarc_node_class:
-    _structformat = ">II2xHI"
+    _structformat = ">IIHHI"
 
     def __init__(self):
         self.type = 0
         self.filenameOffset = 0  # directory name, offset into string table
+
         # 2 bytes unknown
+        self.unknown1 = 0
+
         self.numFileEntries = 0  # how manu files belong to this node?
         self.firstFileEntryOffset = 0
         self._s = struct.Struct(self._structformat)
@@ -89,6 +93,7 @@ class rarc_node_class:
     def unpack(self, buf):
         (self.type,
          self.filenameOffset,
+         self.unknown1,
          self.numFileEntries,
          self.firstFileEntryOffset) = self._s.unpack_from(buf)
 
@@ -229,10 +234,23 @@ def unyaz(input, output):
 
 
 def getNode(index, f, h):
+    global verbose
+
     retval = rarc_node_class()
     f.seek(h.size() + 4 + index*retval.size())
     s = f.read(retval.size())
     retval.unpack(s)
+
+    if verbose:
+        typeString = binascii.unhexlify(('%08x' % (retval.type)))
+        print '*** node %u ***' % (index)
+        print 'type:\t\t%s (0x%08x)' % (typeString, retval.type)
+        print 'name offset:\t0x%08x' % (retval.filenameOffset)
+        print 'unknown:\t0x%04x' % (retval.unknown1)
+        print '# entries:\t0x%04x (%u)' % (
+            retval.numFileEntries, retval.numFileEntries)
+        print 'files offset:\t0x%08x' % (retval.firstFileEntryOffset)
+
     return retval
 
 
@@ -314,21 +332,24 @@ def processNode(node, h, f):
 
 
 def unrarc(i, outputPath):
-    global listMode
+    global listMode, verbose
     header = rarc_header_class()
     header.unpack(i.read(header.size()))
 
-    print 'total size:\t0x%08x (%u)' % (header.filesize, header.filesize)
-    print 'unknown 1:\t0x%08x' % (header.unknown1)
-    print 'data start:\t0x%08x' % (header.dataStartOffset)
-    print 'unknown 2-5:\t0x%08x 0x%08x 0x%08x 0x%08x' % (
-        header.unknown2, header.unknown3, header.unknown4, header.unknown5)
-    print '# nodes:\t0x%08x' % (header.numNodes)
-    print 'unknown 6-7:\t0x%08x 0x%08x' % (header.unknown6, header.unknown7)
-    print 'file start:\t0x%08x' % (header.fileEntriesOffset)
-    print 'unknown 8:\t0x%08x' % (header.unknown8)
-    print 'string start:\t0x%08x' % (header.stringTableOffset)
-    print 'unknown 9-10:\t0x%08x 0x%08x' % (header.unknown9, header.unknown10)
+    if verbose:
+        print 'total size:\t0x%08x (%u)' % (header.filesize, header.filesize)
+        print 'unknown 1:\t0x%08x' % (header.unknown1)
+        print 'data start:\t0x%08x' % (header.dataStartOffset)
+        print 'unknown 2-5:\t0x%08x 0x%08x 0x%08x 0x%08x' % (
+            header.unknown2, header.unknown3, header.unknown4, header.unknown5)
+        print '# nodes:\t0x%08x' % (header.numNodes)
+        print 'unknown 6-7:\t0x%08x 0x%08x' % (
+            header.unknown6, header.unknown7)
+        print 'file start:\t0x%08x' % (header.fileEntriesOffset)
+        print 'unknown 8:\t0x%08x' % (header.unknown8)
+        print 'string start:\t0x%08x' % (header.stringTableOffset)
+        print 'unknown 9-10:\t0x%08x 0x%08x' % (
+            header.unknown9, header.unknown10)
 
     if not listMode:
         try:
@@ -430,7 +451,7 @@ def unu8(i, o):
 
 
 def main():
-    global quiet, listMode, depthnum
+    global quiet, listMode, depthnum, verbose
     parser = OptionParser(usage="python %prog [-q] [-o <output>] <inputfile> [inputfile2] ... [inputfileN]", version="ARCTool 0.3b")
     parser.add_option("-o", "--output", action="store", type="string",
                       dest="of",
@@ -442,12 +463,15 @@ def main():
     parser.add_option("-l", "--list", action="store_true", dest="listMode",
                       default=False,
                       help="print a list of files contained in the specified archive (ignores -q)")
+    parser.add_option("-v", "--verbose", action="store_true", dest="verbose",
+                      default=False)
 
     (options, args) = parser.parse_args()
 
     of = options.of
     quiet = options.quiet
     listMode = options.listMode
+    verbose = options.verbose
 
     depthnum = 0
 
