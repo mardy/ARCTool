@@ -23,28 +23,52 @@ def makedir(dirname):
 
 
 class rarc_header_class:
-    _structformat = ">I4xI16xI8xI4xI8x"
+    _structformat = ">IIIIIIIIIIIIIII"
 
     def __init__(self):
         self.filesize = 0
+
         # 4 bytes unknown
+        self.unknown1 = 0
+
         self.dataStartOffset = 0  # where does actual data start? add 0x20
+
         # 16 bytes unknown
+        self.unknown2 = 0
+        self.unknown3 = 0
+        self.unknown4 = 0
+        self.unknown5 = 0
+
         self.numNodes = 0
+
         # 8 bytes unknown
+        self.unknown6 = 0
+        self.unknown7 = 0
+
         self.fileEntriesOffset = 0
+
         # 4 bytes unknown
+        self.unknown8 = 0
+
         self.stringTableOffset = 0  # where is the string table stored? add 0x20
+
         # 8 bytes unknown
+        self.unknown9 = 0
+        self.unknown10 = 0
 
         self._s = struct.Struct(self._structformat)
 
     def unpack(self, buf):
         (self.filesize,
+         self.unknown1,
          self.dataStartOffset,
+         self.unknown2, self.unknown3, self.unknown4, self.unknown5,
          self.numNodes,
+         self.unknown6, self.unknown7,
          self.fileEntriesOffset,
-         self.stringTableOffset) = self._s.unpack_from(buf)
+         self.unknown8,
+         self.stringTableOffset,
+         self.unknown9, self.unknown10) = self._s.unpack_from(buf)
 
     def size(self):
         # print self._s.size, "ohai"
@@ -142,10 +166,10 @@ class U8_globals:
 
 
 def unyaz(input, output):
-    global quiet, list
+    global quiet, listMode
     # shamelessly stolen^W borrowed from yagcd
     data_size, = struct.unpack_from(">I", input.read(4))  # uncompressed data size
-    if list:
+    if listMode:
         print "Uncompressed size:", data_size, "bytes"
         return
     t = input.read(8)  # dummy
@@ -234,10 +258,10 @@ def getFileEntry(index, h, f):
 
 
 def processNode(node, h, f):
-    global quiet, depthnum, list
+    global quiet, depthnum, listMode
     nodename = getString(node.filenameOffset + h.stringTableOffset + 0x20,
                  f)
-    if not list:
+    if not listMode:
         if not quiet:
             print "Processing node", nodename
         makedir(nodename)
@@ -252,7 +276,7 @@ def processNode(node, h, f):
             if currname != "." and currname != "..":  # don't go to "." and ".."
                 processNode(getNode(currfile.dataOffset, f, h), h, f)
         else:
-            if list:
+            if listMode:
                 print ("  "*depthnum) + currname, "-", currfile.dataSize
                 continue
             if not quiet:
@@ -283,22 +307,36 @@ def processNode(node, h, f):
             except IOError:
                 print "OMG SOMETHING WENT WRONG!!!!1111!!!!!"
                 exit()
-    if not list:
+    if not listMode:
         os.chdir("..")
     else:
         depthnum -= 1
 
 
-def unrarc(i, o):
-    global list
+def unrarc(i, outputPath):
+    global listMode
     header = rarc_header_class()
     header.unpack(i.read(header.size()))
-    if not list:
+
+    print 'total size:\t0x%08x (%u)' % (header.filesize, header.filesize)
+    print 'unknown 1:\t0x%08x' % (header.unknown1)
+    print 'data start:\t0x%08x' % (header.dataStartOffset)
+    print 'unknown 2-5:\t0x%08x 0x%08x 0x%08x 0x%08x' % (
+        header.unknown2, header.unknown3, header.unknown4, header.unknown5)
+    print '# nodes:\t0x%08x' % (header.numNodes)
+    print 'unknown 6-7:\t0x%08x 0x%08x' % (header.unknown6, header.unknown7)
+    print 'file start:\t0x%08x' % (header.fileEntriesOffset)
+    print 'unknown 8:\t0x%08x' % (header.unknown8)
+    print 'string start:\t0x%08x' % (header.stringTableOffset)
+    print 'unknown 9-10:\t0x%08x 0x%08x' % (header.unknown9, header.unknown10)
+
+    if not listMode:
         try:
-            makedir(o)
+            makedir(outputPath)
         except:
             pass
-        os.chdir(o)
+        os.chdir(outputPath)
+
     processNode(getNode(0, i, header), header, i)
 
 
@@ -322,10 +360,10 @@ def get_u8_node(i, g, index):
 
 
 def unu8(i, o):
-    global quiet, depthnum, list
+    global quiet, depthnum, listMode
     header = U8_archive_header()
     header.unpack(i.read(header.size()))
-    if not list:
+    if not listMode:
         try:
             makedir(o)
         except:
@@ -342,7 +380,7 @@ def unu8(i, o):
     for index in range(2, root.fsize+1):
         node = get_u8_node(i, g, index)
         name = get_u8_name(i, g, node)
-        if list:
+        if listMode:
             if node.type == 0:
                 print ("  "*depthnum) + name, "-", node.fsize, "bytes"
             elif node.type == 0x0100:
@@ -383,16 +421,16 @@ def unu8(i, o):
             os.chdir(name)
             depth.append(node.fsize)
         if index == depth[-1]:
-            if not list:
+            if not listMode:
                 os.chdir("..")
             depthnum -= 1
             depth.pop()
-    if not list:
+    if not listMode:
         os.chdir("..")
 
 
 def main():
-    global of, quiet, list, depthnum
+    global quiet, listMode, depthnum
     parser = OptionParser(usage="python %prog [-q] [-o <output>] <inputfile> [inputfile2] ... [inputfileN]", version="ARCTool 0.3b")
     parser.add_option("-o", "--output", action="store", type="string",
                       dest="of",
@@ -401,7 +439,7 @@ def main():
     parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
                       default=False,
                       help="don't print anything (except errors)")
-    parser.add_option("-l", "--list", action="store_true", dest="list",
+    parser.add_option("-l", "--list", action="store_true", dest="listMode",
                       default=False,
                       help="print a list of files contained in the specified archive (ignores -q)")
 
@@ -409,7 +447,7 @@ def main():
 
     of = options.of
     quiet = options.quiet
-    list = options.list
+    listMode = options.listMode
 
     depthnum = 0
 
@@ -421,13 +459,13 @@ def main():
             makedir(of)
             os.chdir(of)
 
-    for file in args:
+    for inFile in args:
         if options.of is None or len(args) > 1:
-            of = os.path.split(file)[1] + ".extracted"
+            of = os.path.split(inFile)[1] + ".extracted"
         if len(args) > 1 and options.of is not None:
-            file = "../" + file
+            inFile = "../" + inFile
         try:
-            f = open(file, "rb")
+            f = open(inFile, "rb")
         except IOError:
             print "Input file could not be opened!"
             exit()
