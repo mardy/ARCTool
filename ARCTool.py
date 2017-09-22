@@ -24,52 +24,49 @@ def makedir(dirname):
 
 
 class rarc_header_class:
-    _structformat = ">IIIIIIIIIIIIIII"
+    _structformat = ">IIIIIIIIIIIIIHHI"
 
     def __init__(self):
         self.filesize = 0
+        self.headersize = 0
+        self.dataStartOffset = 0  # offset to data, relative to end of header
 
-        # 4 bytes unknown
-        self.unknown1 = 0
-
-        self.dataStartOffset = 0  # where does actual data start? add 0x20
-
-        # 16 bytes unknown
-        self.unknown2 = 0
+        self.filelength = 0
         self.unknown3 = 0
-        self.unknown4 = 0
+        self.filelength2 = 0
         self.unknown5 = 0
 
+        # begin info block
         self.numNodes = 0
-
-        # 8 bytes unknown
-        self.unknown6 = 0
-        self.unknown7 = 0
-
+        self.nodeEntriesOffset = 0  # offset to node, relative to info block
+        self.numEntries = 0
         self.fileEntriesOffset = 0
 
-        # 4 bytes unknown
-        self.unknown8 = 0
-
+        self.stringTableLength = 0
         self.stringTableOffset = 0  # where is the string table stored? add 0x20
 
-        # 8 bytes unknown
-        self.unknown9 = 0
+        self.numFiles = 0
         self.unknown10 = 0
+        self.unknown11 = 0
 
         self._s = struct.Struct(self._structformat)
 
     def unpack(self, buf):
         (self.filesize,
-         self.unknown1,
+         self.headersize,
          self.dataStartOffset,
-         self.unknown2, self.unknown3, self.unknown4, self.unknown5,
+         self.filelength,
+         self.unknown3,
+         self.filelength2,
+         self.unknown5,
          self.numNodes,
-         self.unknown6, self.unknown7,
+         self.nodeEntriesOffset,
+         self.numEntries,
          self.fileEntriesOffset,
-         self.unknown8,
+         self.stringTableLength,
          self.stringTableOffset,
-         self.unknown9, self.unknown10) = self._s.unpack_from(buf)
+         self.numFiles,
+         self.unknown10, self.unknown11) = self._s.unpack_from(buf)
 
     def size(self):
         # print self._s.size, "ohai"
@@ -337,19 +334,25 @@ def unrarc(i, outputPath):
     header.unpack(i.read(header.size()))
 
     if verbose:
+        print '*** RARC header ***'
         print 'total size:\t0x%08x (%u)' % (header.filesize, header.filesize)
-        print 'unknown 1:\t0x%08x' % (header.unknown1)
+        print 'header size:\t0x%08x' % (header.headersize)
         print 'data start:\t0x%08x' % (header.dataStartOffset)
-        print 'unknown 2-5:\t0x%08x 0x%08x 0x%08x 0x%08x' % (
-            header.unknown2, header.unknown3, header.unknown4, header.unknown5)
-        print '# nodes:\t0x%08x' % (header.numNodes)
-        print 'unknown 6-7:\t0x%08x 0x%08x' % (
-            header.unknown6, header.unknown7)
+        print 'files size:\t0x%08x' % (header.filelength)
+        print 'unknown 3:\t0x%08x' % (header.unknown3)
+        print 'files size2:\t0x%08x' % (header.filelength2)
+        print 'unknown 5:\t0x%08x' % (header.unknown5)
+        print '*** INFO BLOCK ***'
+        print '# nodes:\t0x%08x (%u)' % (header.numNodes, header.numNodes)
+        print 'node offset:\t0x%08x' % (header.nodeEntriesOffset)
+        print '# entries:\t0x%08x (%u)' % (
+            header.numEntries, header.numEntries)
         print 'file start:\t0x%08x' % (header.fileEntriesOffset)
-        print 'unknown 8:\t0x%08x' % (header.unknown8)
+        print 'strings length:\t0x%08x' % (header.stringTableLength)
         print 'string start:\t0x%08x' % (header.stringTableOffset)
-        print 'unknown 9-10:\t0x%08x 0x%08x' % (
-            header.unknown9, header.unknown10)
+        print 'num files:\t0x%04x (%u)' % (header.numFiles, header.numFiles)
+        print 'unknown 10-11:\t0x%04x 0x%08x' % (
+            header.unknown10, header.unknown11)
 
     if not listMode:
         try:
