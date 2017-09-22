@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import struct
 import sys
 import os
@@ -23,23 +24,27 @@ def makedir(dirname):
 
 class rarc_header_class:
     _structformat = ">I4xI16xI8xI4xI8x"
-    filesize = 0
-    # 4 bytes unknown
-    dataStartOffset = 0  # where does actual data start? add 0x20
-    # 16 bytes unknown
-    numNodes = 0
-    # 8 bytes unknown
-    fileEntriesOffset = 0
-    # 4 bytes unknown
-    stringTableOffset = 0 # where is the string table stored? add 0x20
-    # 8 bytes unknown
 
     def __init__(self):
+        self.filesize = 0
+        # 4 bytes unknown
+        self.dataStartOffset = 0  # where does actual data start? add 0x20
+        # 16 bytes unknown
+        self.numNodes = 0
+        # 8 bytes unknown
+        self.fileEntriesOffset = 0
+        # 4 bytes unknown
+        self.stringTableOffset = 0  # where is the string table stored? add 0x20
+        # 8 bytes unknown
+
         self._s = struct.Struct(self._structformat)
 
     def unpack(self, buf):
-        s = self
-        s.filesize, s.dataStartOffset, s.numNodes, s.fileEntriesOffset, s.stringTableOffset = s._s.unpack_from(buf)
+        (self.filesize,
+         self.dataStartOffset,
+         self.numNodes,
+         self.fileEntriesOffset,
+         self.stringTableOffset) = self._s.unpack_from(buf)
 
     def size(self):
         # print self._s.size, "ohai"
@@ -48,18 +53,20 @@ class rarc_header_class:
 
 class rarc_node_class:
     _structformat = ">II2xHI"
-    type = 0
-    filenameOffset = 0  # directory name, offset into string table
-    # 2 bytes unknown
-    numFileEntries = 0  # how manu files belong to this node?
-    firstFileEntryOffset = 0
 
     def __init__(self):
+        self.type = 0
+        self.filenameOffset = 0  # directory name, offset into string table
+        # 2 bytes unknown
+        self.numFileEntries = 0  # how manu files belong to this node?
+        self.firstFileEntryOffset = 0
         self._s = struct.Struct(self._structformat)
 
     def unpack(self, buf):
-        s = self
-        s.type, s.filenameOffset, s.numFileEntries, s.firstFileEntryOffset = s._s.unpack_from(buf)
+        (self.type,
+         self.filenameOffset,
+         self.numFileEntries,
+         self.firstFileEntryOffset) = self._s.unpack_from(buf)
 
     def size(self):
         # print self._s.size
@@ -68,18 +75,21 @@ class rarc_node_class:
 
 class rarc_fileEntry_class:
     _structformat = ">H4xHII4x"
-    id = 0    # file id. if 0xFFFF, this entry is a subdir link
-    # 4 bytes unknown
-    filenameOffset = 0  # file/subdir name, offset into string table
-    dataOffset = 0    # offset to file data (for subdirs: index of node representing subdir)
-    dataSize = 0  # size of data
 
     def __init__(self):
+        self.id = 0    # file id. if 0xFFFF, this entry is a subdir link
+        # 4 bytes unknown
+        self.filenameOffset = 0  # file/subdir name, offset into string table
+        self.dataOffset = 0    # offset to file data (for subdirs: index of node representing subdir)
+        self.dataSize = 0  # size of data
+
         self._s = struct.Struct(self._structformat)
 
     def unpack(self, buf):
-        s = self
-        s.id, s.filenameOffset, s.dataOffset, s.dataSize = s._s.unpack_from(buf)
+        (self.id,
+         self.filenameOffset,
+         self.dataOffset,
+         self.dataSize) = self._s.unpack_from(buf)
 
     def size(self):
         return self._s.size
@@ -87,17 +97,19 @@ class rarc_fileEntry_class:
 
 class U8_archive_header:
     _structformat = ">III16x"
-    rootnode_offset = 0  # offset to root_node, always 0x20
-    header_size = 0     # size of header from root_node to end of string table
-    data_offset = 0     # offset to data: rootnode_offset + header_size aligned to 0x40
-    # 16 bytes zeros
 
     def __init__(self):
+        self.rootnode_offset = 0  # offset to root_node, always 0x20
+        self.header_size = 0     # size of header from root_node to end of string table
+        self.data_offset = 0     # offset to data: rootnode_offset + header_size aligned to 0x40
+        # 16 bytes zeros
+
         self._s = struct.Struct(self._structformat)
 
     def unpack(self, buf):
-        s = self
-        s.rootnode_offset, s.header_size, s.data_offset = s._s.unpack_from(buf)
+        (self.rootnode_offset,
+         self.header_size,
+         self.data_offset) = self._s.unpack_from(buf)
 
     def size(self):
         return self._s.size
@@ -105,17 +117,21 @@ class U8_archive_header:
 
 class U8_node:
     _structformat = ">HHII"
-    type = 0  # really u8, normal files = 0x0000, directories = 0x0100
-    name_offset = 0     # really 'u24'
-    data_offset = 0
-    fsize = 0  # files: filesize, dirs: last included file with rootnode as 1
 
     def __init__(self):
+        self.type = 0  # really u8, normal files = 0x0000, directories = 0x0100
+        self.name_offset = 0     # really 'u24'
+        self.data_offset = 0
+        self.fsize = 0  # files: filesize, dirs: last included file with rootnode as 1
+
         self._s = struct.Struct(self._structformat)
 
     def unpack(self, buf):
         s = self
-        s.type, s.name_offset, s.data_offset, s.fsize = s._s.unpack_from(buf)
+        (s.type,
+         s.name_offset,
+         s.data_offset,
+         s.fsize) = s._s.unpack_from(buf)
 
     def size(self):
         return self._s.size
@@ -379,15 +395,15 @@ def main():
     global of, quiet, list, depthnum
     parser = OptionParser(usage="python %prog [-q] [-o <output>] <inputfile> [inputfile2] ... [inputfileN]", version="ARCTool 0.3b")
     parser.add_option("-o", "--output", action="store", type="string",
-              dest="of",
-              help="write output to FILE/DIR. If you are extracting multiple archives, all of them will be put in this dir.",
-              metavar="FILE/DIR")
+                      dest="of",
+                      help="write output to FILE/DIR. If you are extracting multiple archives, all of them will be put in this dir.",
+                      metavar="FILE/DIR")
     parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
-              default=False,
-              help="don't print anything (except errors)")
+                      default=False,
+                      help="don't print anything (except errors)")
     parser.add_option("-l", "--list", action="store_true", dest="list",
-              default=False,
-              help="print a list of files contained in the specified archive (ignores -q)")
+                      default=False,
+                      help="print a list of files contained in the specified archive (ignores -q)")
 
     (options, args) = parser.parse_args()
 
