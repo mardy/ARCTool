@@ -79,10 +79,7 @@ class rarc_node_class:
     def __init__(self):
         self.type = 0
         self.filenameOffset = 0  # directory name, offset into string table
-
-        # 2 bytes unknown
-        self.unknown1 = 0
-
+        self.filenameHash = 0
         self.numFileEntries = 0  # how manu files belong to this node?
         self.firstFileEntryOffset = 0
         self._s = struct.Struct(self._structformat)
@@ -90,7 +87,7 @@ class rarc_node_class:
     def unpack(self, buf):
         (self.type,
          self.filenameOffset,
-         self.unknown1,
+         self.filenameHash,
          self.numFileEntries,
          self.firstFileEntryOffset) = self._s.unpack_from(buf)
 
@@ -243,10 +240,10 @@ def getNode(index, f, h):
         print '*** node %u ***' % (index)
         print 'type:\t\t%s (0x%08x)' % (typeString, retval.type)
         print 'name offset:\t0x%08x' % (retval.filenameOffset)
-        print 'unknown:\t0x%04x' % (retval.unknown1)
+        print 'name hash:\t0x%04x' % (retval.filenameHash)
         print '# entries:\t0x%04x (%u)' % (
             retval.numFileEntries, retval.numFileEntries)
-        print 'files offset:\t0x%08x' % (retval.firstFileEntryOffset)
+        print 'file offset:\t0x%08x' % (retval.firstFileEntryOffset)
 
     return retval
 
@@ -275,7 +272,7 @@ def getFileEntry(index, h, f):
 def processNode(node, h, f):
     global quiet, depthnum, listMode
     nodename = getString(node.filenameOffset + h.stringTableOffset + 0x20,
-                 f)
+                         f)
     if not listMode:
         if not quiet:
             print "Processing node", nodename
