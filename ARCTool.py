@@ -4,6 +4,8 @@ import struct
 import sys
 import os
 from optparse import OptionParser
+from rarc_headers import (RARCHeader, RARCNode, RARCFileEntry)
+from u8_headers import (U8ArchiveHeader, U8Node, U8Globals)
 
 
 def openOutput(f):
@@ -21,147 +23,6 @@ def makedir(dirname):
     except OSError, e:
         if not quiet:
             print "WARNING: Directory", dirname, "already exists!"
-
-
-class rarc_header_class:
-    _structformat = ">IIIIIIIIIIIIIHHI"
-
-    def __init__(self):
-        self.filesize = 0
-        self.headersize = 0
-        self.dataStartOffset = 0  # offset to data, relative to end of header
-
-        self.filelength = 0
-        self.unknown3 = 0
-        self.filelength2 = 0
-        self.unknown5 = 0
-
-        # begin info block
-        self.numNodes = 0
-        self.nodeEntriesOffset = 0  # offset to node, relative to info block
-        self.numEntries = 0
-        self.fileEntriesOffset = 0
-
-        self.stringTableLength = 0
-        self.stringTableOffset = 0  # where is the string table stored? add 0x20
-
-        self.numFiles = 0
-        self.unknown10 = 0
-        self.unknown11 = 0
-
-        self._s = struct.Struct(self._structformat)
-
-    def unpack(self, buf):
-        (self.filesize,
-         self.headersize,
-         self.dataStartOffset,
-         self.filelength,
-         self.unknown3,
-         self.filelength2,
-         self.unknown5,
-         self.numNodes,
-         self.nodeEntriesOffset,
-         self.numEntries,
-         self.fileEntriesOffset,
-         self.stringTableLength,
-         self.stringTableOffset,
-         self.numFiles,
-         self.unknown10, self.unknown11) = self._s.unpack_from(buf)
-
-    def size(self):
-        # print self._s.size, "ohai"
-        return self._s.size
-
-
-class rarc_node_class:
-    _structformat = ">IIHHI"
-
-    def __init__(self):
-        self.type = 0
-        self.filenameOffset = 0  # directory name, offset into string table
-        self.filenameHash = 0
-        self.numFileEntries = 0  # how manu files belong to this node?
-        self.firstFileEntryOffset = 0
-        self._s = struct.Struct(self._structformat)
-
-    def unpack(self, buf):
-        (self.type,
-         self.filenameOffset,
-         self.filenameHash,
-         self.numFileEntries,
-         self.firstFileEntryOffset) = self._s.unpack_from(buf)
-
-    def size(self):
-        # print self._s.size
-        return self._s.size
-
-
-class rarc_fileEntry_class:
-    _structformat = ">H4xHII4x"
-
-    def __init__(self):
-        self.id = 0    # file id. if 0xFFFF, this entry is a subdir link
-        # 4 bytes unknown
-        self.filenameOffset = 0  # file/subdir name, offset into string table
-        self.dataOffset = 0    # offset to file data (for subdirs: index of node representing subdir)
-        self.dataSize = 0  # size of data
-
-        self._s = struct.Struct(self._structformat)
-
-    def unpack(self, buf):
-        (self.id,
-         self.filenameOffset,
-         self.dataOffset,
-         self.dataSize) = self._s.unpack_from(buf)
-
-    def size(self):
-        return self._s.size
-
-
-class U8_archive_header:
-    _structformat = ">III16x"
-
-    def __init__(self):
-        self.rootnode_offset = 0  # offset to root_node, always 0x20
-        self.header_size = 0     # size of header from root_node to end of string table
-        self.data_offset = 0     # offset to data: rootnode_offset + header_size aligned to 0x40
-        # 16 bytes zeros
-
-        self._s = struct.Struct(self._structformat)
-
-    def unpack(self, buf):
-        (self.rootnode_offset,
-         self.header_size,
-         self.data_offset) = self._s.unpack_from(buf)
-
-    def size(self):
-        return self._s.size
-
-
-class U8_node:
-    _structformat = ">HHII"
-
-    def __init__(self):
-        self.type = 0  # really u8, normal files = 0x0000, directories = 0x0100
-        self.name_offset = 0     # really 'u24'
-        self.data_offset = 0
-        self.fsize = 0  # files: filesize, dirs: last included file with rootnode as 1
-
-        self._s = struct.Struct(self._structformat)
-
-    def unpack(self, buf):
-        s = self
-        (s.type,
-         s.name_offset,
-         s.data_offset,
-         s.fsize) = s._s.unpack_from(buf)
-
-    def size(self):
-        return self._s.size
-
-
-class U8_globals:
-    pass
 
 
 def unyaz(input, output):
@@ -230,7 +91,7 @@ def unyaz(input, output):
 def getNode(index, f, h):
     global verbose
 
-    retval = rarc_node_class()
+    retval = RARCNode()
     f.seek(h.size() + 4 + index*retval.size())
     s = f.read(retval.size())
     retval.unpack(s)
@@ -263,7 +124,7 @@ def getString(pos, f):
 
 
 def getFileEntry(index, h, f):
-    retval = rarc_fileEntry_class()
+    retval = RARCFileEntry()
     f.seek(h.fileEntriesOffset + index*retval.size() + 0x20)
     retval.unpack(f.read(retval.size()))
     return retval
@@ -327,7 +188,7 @@ def processNode(node, h, f):
 
 def unrarc(i, outputPath):
     global listMode, verbose
-    header = rarc_header_class()
+    header = RARCHeader()
     header.unpack(i.read(header.size()))
 
     if verbose:
@@ -373,7 +234,7 @@ def get_u8_name(i, g, node):
 
 
 def get_u8_node(i, g, index):
-    retval = U8_node()
+    retval = U8Node()
     index -= 1
     i.seek(g.header.rootnode_offset + (index * retval.size()))
     retval.unpack(i.read(retval.size()))
@@ -382,7 +243,7 @@ def get_u8_node(i, g, index):
 
 def unu8(i, o):
     global quiet, depthnum, listMode
-    header = U8_archive_header()
+    header = U8ArchiveHeader()
     header.unpack(i.read(header.size()))
     if not listMode:
         try:
@@ -390,9 +251,9 @@ def unu8(i, o):
         except:
             pass
         os.chdir(o)
-    root = U8_node()
+    root = U8Node()
     root.unpack(i.read(header.size()))
-    g = U8_globals()
+    g = U8Globals()
     g.rootnode = root
     g.numnodes = root.fsize
     g.header = header
