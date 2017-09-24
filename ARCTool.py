@@ -4,7 +4,7 @@ import struct
 import sys
 import os
 from optparse import OptionParser
-from rarc_headers import (RARCHeader, RARCNode, RARCFileEntry)
+from rarc_headers import (RARCHeader, RARCInfoBlock, RARCNode, RARCFileEntry)
 from u8_headers import (U8ArchiveHeader, U8Node, U8Globals)
 
 
@@ -88,11 +88,11 @@ def unyaz(input, output):
     output.write("".join(dst))
 
 
-def getNode(index, f, h):
+def getNode(index, f, header, info):
     global verbose
 
     retval = RARCNode()
-    f.seek(h.size() + 4 + index*retval.size())
+    f.seek(header.size() + info.size() + 4 + index*retval.size())
     s = f.read(retval.size())
     retval.unpack(s)
 
@@ -123,16 +123,16 @@ def getString(pos, f):
     return "".join(retval)
 
 
-def getFileEntry(index, h, f):
+def getFileEntry(index, info, f):
     retval = RARCFileEntry()
-    f.seek(h.fileEntriesOffset + index*retval.size() + 0x20)
+    f.seek(info.fileEntriesOffset + index*retval.size() + 0x20)
     retval.unpack(f.read(retval.size()))
     return retval
 
 
-def processNode(node, h, f):
+def processNode(node, header, info, f):
     global quiet, depthnum, listMode
-    nodename = getString(node.filenameOffset + h.stringTableOffset + 0x20,
+    nodename = getString(node.filenameOffset + info.stringTableOffset + 0x20,
                          f)
     if not listMode:
         if not quiet:
@@ -143,11 +143,20 @@ def processNode(node, h, f):
         print ("  "*depthnum) + nodename + "/"
         depthnum += 1
     for i in range(0, node.numFileEntries):
-        currfile = getFileEntry(node.firstFileEntryOffset + i, h, f)
-        currname = getString(currfile.filenameOffset + h.stringTableOffset + 0x20, f)
+        currfile = getFileEntry(node.firstFileEntryOffset + i, info, f)
+        currname = getString(currfile.filenameOffset + info.stringTableOffset + 0x20, f)
         if (currfile.id == 0xFFFF):  # file is a subdir
             if currname != "." and currname != "..":  # don't go to "." and ".."
-                processNode(getNode(currfile.dataOffset, f, h), h, f)
+                processNode(
+                    getNode(
+                        currfile.dataOffset,
+                        f,
+                        header,
+                        info),
+                    header,
+                    info,
+                    f
+                )
         else:
             if listMode:
                 print ("  "*depthnum) + currname, "-", currfile.dataSize
@@ -157,7 +166,7 @@ def processNode(node, h, f):
             try:
                 percent = 0
                 dest = open(currname, "wb")
-                f.seek(currfile.dataOffset + h.dataStartOffset + 0x20)
+                f.seek(currfile.dataOffset + header.dataStartOffset + 0x20)
                 size = currfile.dataSize
                 while size > 0:
                     if not quiet:
@@ -191,26 +200,12 @@ def unrarc(i, outputPath):
     header = RARCHeader()
     header.unpack(i.read(header.size()))
 
+    info_block = RARCInfoBlock()
+    info_block.unpack(i.read(info_block.size()))
+
     if verbose:
-        print '*** RARC header ***'
-        print 'total size:\t0x%08x (%u)' % (header.filesize, header.filesize)
-        print 'header size:\t0x%08x' % (header.headersize)
-        print 'data start:\t0x%08x' % (header.dataStartOffset)
-        print 'files size:\t0x%08x' % (header.filelength)
-        print 'unknown 3:\t0x%08x' % (header.unknown3)
-        print 'files size2:\t0x%08x' % (header.filelength2)
-        print 'unknown 5:\t0x%08x' % (header.unknown5)
-        print '*** INFO BLOCK ***'
-        print '# nodes:\t0x%08x (%u)' % (header.numNodes, header.numNodes)
-        print 'node offset:\t0x%08x' % (header.nodeEntriesOffset)
-        print '# entries:\t0x%08x (%u)' % (
-            header.numEntries, header.numEntries)
-        print 'file start:\t0x%08x' % (header.fileEntriesOffset)
-        print 'strings length:\t0x%08x' % (header.stringTableLength)
-        print 'string start:\t0x%08x' % (header.stringTableOffset)
-        print 'num files:\t0x%04x (%u)' % (header.numFiles, header.numFiles)
-        print 'unknown 10-11:\t0x%04x 0x%08x' % (
-            header.unknown10, header.unknown11)
+        print header
+        print info_block
 
     if not listMode:
         try:
@@ -219,7 +214,7 @@ def unrarc(i, outputPath):
             pass
         os.chdir(outputPath)
 
-    processNode(getNode(0, i, header), header, i)
+    processNode(getNode(0, i, header, info_block), header, info_block, i)
 
 
 def get_u8_name(i, g, node):
