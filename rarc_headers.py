@@ -271,19 +271,24 @@ class RARCNode(BaseHeader):
 
 
 class RARCFileEntry(BaseHeader):
-    _structformat = ">H4xHII4x"
+    _structformat = ">HHHHIII"
 
     def __init__(self):
         BaseHeader.__init__(self)
 
         self.id = 0    # file id. if 0xFFFF, this entry is a subdir link
-        # 4 bytes unknown
+        self.hash = 0
+        self.type = 0
         self.filenameOffset = 0  # file/subdir name, offset into string table
         self.dataOffset = 0    # offset to file data (for subdirs: index of node representing subdir)
         self.dataSize = 0  # size of data
+        self.unknown1 = 0 # always 0?
 
     def unpack(self, buf):
         (self.id,
+         self.hash,
+         self.type,
          self.filenameOffset,
          self.dataOffset,
-         self.dataSize) = self._s.unpack_from(buf)
+         self.dataSize,
+         self.unknown1) = self._s.unpack_from(buf)
