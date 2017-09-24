@@ -89,6 +89,9 @@ class RARCFile:
         return result
 
     def process_node(self, node, depth=0):
+        if self.verbose:
+            print node
+
         if not self.list_mode:
             if self.verbose:
                 print 'Processing node "%s"' % (node.name)
@@ -268,6 +271,8 @@ class RARCNode(BaseHeader):
         result += '# entries:\t0x%04x (%u)\n' % (
             self.numFileEntries, self.numFileEntries)
         result += 'file offset:\t0x%08x' % (self.firstFileEntryOffset)
+
+        return result
 
 
 class RARCFileEntry(BaseHeader):
