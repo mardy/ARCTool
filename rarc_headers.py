@@ -1,4 +1,155 @@
+import binascii
+import os
 from header import BaseHeader
+
+
+def makedir(dirname):
+    try:
+        os.mkdir(dirname)
+    except OSError, e:
+        print e
+
+
+class RARCFile:
+
+    def __init__(self, quiet=False, list_mode=False, verbose=False):
+        self.quiet = quiet
+        self.list_mode = list_mode
+        self.verbose = verbose
+
+        self.magic_size = len('RARC')
+
+        self.header = RARCHeader()
+        self.info_block = RARCInfoBlock()
+        self.nodes = []
+
+    def read_node(self, index):
+        node = RARCNode()
+
+        node_offset = self.magic_size
+        node_offset += self.header.size()
+        node_offset += self.info_block.size()
+        node_offset += index * node.size()
+
+        self.in_file.seek(node_offset)
+
+        node.unpack(self.in_file.read(node.size()))
+
+        node.name = self.read_string(node.filenameOffset)
+
+        return node
+
+    def read_file_entry(self, index):
+        file_ent = RARCFileEntry()
+
+        file_offset = self.magic_size
+        file_offset += self.header.size()
+        file_offset += self.info_block.fileEntriesOffset
+        file_offset += file_ent.size() * index
+
+        self.in_file.seek(file_offset)
+
+        file_ent.unpack(self.in_file.read(file_ent.size()))
+
+        file_ent.name = self.read_string(file_ent.filenameOffset)
+
+        return file_ent
+
+    def read_file_content(self, file_ent):
+        content_offset = self.magic_size
+        content_offset += self.header.size()
+        content_offset += self.header.dataStartOffset
+        content_offset += file_ent.dataOffset
+
+        self.in_file.seek(content_offset)
+
+        return self.in_file.read(file_ent.dataSize)
+
+    def read_string(self, offset):
+        orig_offset = self.in_file.tell()
+
+        full_offset = self.magic_size
+        full_offset += self.header.size()
+        full_offset += self.info_block.stringTableOffset
+        full_offset += offset
+
+        self.in_file.seek(full_offset)
+
+        result = []
+        while True:
+            char = self.in_file.read(1)
+            if char == "\0":
+                break
+            result.append(char)
+
+        result = ''.join(result)
+
+        self.in_file.seek(orig_offset)
+
+        return result
+
+    def process_node(self, node, depth=0):
+        if not self.list_mode:
+            if self.verbose:
+                print 'Processing node "%s"' % (node.name)
+            makedir(node.name)
+            os.chdir(node.name)
+        else:
+            pass
+
+        for i in range(node.numFileEntries):
+            cur_file = self.read_file_entry(node.firstFileEntryOffset + i)
+
+            if cur_file.name not in ['.', '..']:
+                print '%s %s' % ('-' * (depth + 1), cur_file.name)
+
+            # process subdirectory
+            if cur_file.id == 0xFFFF:
+                if cur_file.name in ['.', '..']:
+                    continue
+
+                next_node = self.read_node(cur_file.dataOffset)
+                self.process_node(next_node, depth + 1)
+            # process file
+            else:
+                if self.list_mode:
+                    continue
+
+                out_file = open(cur_file.name, 'wb')
+                out_file.write(self.read_file_content(cur_file))
+                out_file.close()
+
+        if not self.list_mode:
+            os.chdir('..')
+
+    def unpack(self, in_file, out_path):
+        self.in_file = in_file
+        self.out_path = out_path
+
+        self.header.unpack(in_file.read(self.header.size()))
+        self.info_block.unpack(in_file.read(self.info_block.size()))
+
+        if self.verbose:
+            print self.header
+            print self.info_block
+
+        if not self.list_mode:
+            try:
+                makedir(out_path)
+            except:
+                pass
+            os.chdir(out_path)
+
+        # Recurse root nodes
+        for i in range(self.info_block.numNodes):
+            cur_node = self.read_node(i)
+
+            if cur_node.typeString == 'ROOT':
+                print 'root node "%s"' % (cur_node.name)
+                self.process_node(cur_node)
+
+    def pack(self, in_path, out_path):
+        pass
 
 
 class RARCHeader(BaseHeader):
@@ -93,6 +244,7 @@ class RARCNode(BaseHeader):
         BaseHeader.__init__(self)
 
         self.type = 0
+        self.typeString = ''
         self.filenameOffset = 0  # directory name, offset into string table
         self.filenameHash = 0
         self.numFileEntries = 0  # how manu files belong to this node?
@@ -104,6 +256,18 @@ class RARCNode(BaseHeader):
          self.filenameHash,
          self.numFileEntries,
          self.firstFileEntryOffset) = self._s.unpack_from(buf)
+
+        self.typeString = binascii.unhexlify(('%08x' % (self.type)))
+
+    def __str__(self):
+        result = ''
+        result += '*** node ***\n'
+        result += 'type:\t\t%s (0x%08x)\n' % (self.typeString, self.type)
+        result += 'name offset:\t0x%08x\n' % (self.filenameOffset)
+        result += 'name hash:\t0x%04x\n' % (self.filenameHash)
+        result += '# entries:\t0x%04x (%u)\n' % (
+            self.numFileEntries, self.numFileEntries)
+        result += 'file offset:\t0x%08x' % (self.firstFileEntryOffset)
 
 
 class RARCFileEntry(BaseHeader):

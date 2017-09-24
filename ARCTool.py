@@ -4,7 +4,8 @@ import struct
 import sys
 import os
 from optparse import OptionParser
-from rarc_headers import (RARCHeader, RARCInfoBlock, RARCNode, RARCFileEntry)
+from rarc_headers import (RARCFile, RARCHeader,
+                          RARCInfoBlock, RARCNode, RARCFileEntry)
 from u8_headers import (U8ArchiveHeader, U8Node, U8Globals)
 
 
@@ -88,133 +89,10 @@ def unyaz(input, output):
     output.write("".join(dst))
 
 
-def getNode(index, f, header, info):
-    global verbose
-
-    retval = RARCNode()
-    f.seek(header.size() + info.size() + 4 + index*retval.size())
-    s = f.read(retval.size())
-    retval.unpack(s)
-
-    if verbose:
-        typeString = binascii.unhexlify(('%08x' % (retval.type)))
-        print '*** node %u ***' % (index)
-        print 'type:\t\t%s (0x%08x)' % (typeString, retval.type)
-        print 'name offset:\t0x%08x' % (retval.filenameOffset)
-        print 'name hash:\t0x%04x' % (retval.filenameHash)
-        print '# entries:\t0x%04x (%u)' % (
-            retval.numFileEntries, retval.numFileEntries)
-        print 'file offset:\t0x%08x' % (retval.firstFileEntryOffset)
-
-    return retval
-
-
-def getString(pos, f):
-    t = f.tell()
-    f.seek(pos)
-    retval = []
-    char = 0
-    while True:
-        char = f.read(1)
-        if char == "\0":
-            break
-        retval.append(char)
-    f.seek(t)
-    return "".join(retval)
-
-
-def getFileEntry(index, info, f):
-    retval = RARCFileEntry()
-    f.seek(info.fileEntriesOffset + index*retval.size() + 0x20)
-    retval.unpack(f.read(retval.size()))
-    return retval
-
-
-def processNode(node, header, info, f):
-    global quiet, depthnum, listMode
-    nodename = getString(node.filenameOffset + info.stringTableOffset + 0x20,
-                         f)
-    if not listMode:
-        if not quiet:
-            print "Processing node", nodename
-        makedir(nodename)
-        os.chdir(nodename)
-    else:
-        print ("  "*depthnum) + nodename + "/"
-        depthnum += 1
-    for i in range(0, node.numFileEntries):
-        currfile = getFileEntry(node.firstFileEntryOffset + i, info, f)
-        currname = getString(currfile.filenameOffset + info.stringTableOffset + 0x20, f)
-        if (currfile.id == 0xFFFF):  # file is a subdir
-            if currname != "." and currname != "..":  # don't go to "." and ".."
-                processNode(
-                    getNode(
-                        currfile.dataOffset,
-                        f,
-                        header,
-                        info),
-                    header,
-                    info,
-                    f
-                )
-        else:
-            if listMode:
-                print ("  "*depthnum) + currname, "-", currfile.dataSize
-                continue
-            if not quiet:
-                print "Dumping", nodename + "/" + currname, " 0%",
-            try:
-                percent = 0
-                dest = open(currname, "wb")
-                f.seek(currfile.dataOffset + header.dataStartOffset + 0x20)
-                size = currfile.dataSize
-                while size > 0:
-                    if not quiet:
-                        calcpercent = int(((currfile.dataSize-size)/(currfile.dataSize*1.0))*100)
-                        calcpercent = int(calcpercent)
-                        if calcpercent > percent:
-                            if calcpercent > 9:
-                                sys.stdout.write("\b")
-                            sys.stdout.write("\b\b" + str(calcpercent) + "%")
-                            sys.stdout.flush()
-                            percent = calcpercent
-                    dest.write(f.read(size))
-                    size -= 1024
-                if not quiet:
-                    if percent > 9:
-                        sys.stdout.write("\b")
-                    sys.stdout.write("\b\b100%")
-                    print ""
-                dest.close()
-            except IOError:
-                print "OMG SOMETHING WENT WRONG!!!!1111!!!!!"
-                exit()
-    if not listMode:
-        os.chdir("..")
-    else:
-        depthnum -= 1
-
-
 def unrarc(i, outputPath):
     global listMode, verbose
-    header = RARCHeader()
-    header.unpack(i.read(header.size()))
-
-    info_block = RARCInfoBlock()
-    info_block.unpack(i.read(info_block.size()))
-
-    if verbose:
-        print header
-        print info_block
-
-    if not listMode:
-        try:
-            makedir(outputPath)
-        except:
-            pass
-        os.chdir(outputPath)
-
-    processNode(getNode(0, i, header, info_block), header, info_block, i)
+    rarc_file = RARCFile(list_mode=listMode, verbose=verbose)
+    rarc_file.unpack(i, outputPath)
 
 
 def get_u8_name(i, g, node):
