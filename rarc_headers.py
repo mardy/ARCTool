@@ -37,6 +37,7 @@ class RARCFile:
         self.nodes = []
         self.file_entries = []
         self.string_table = ''
+        self.string_lookup = {}
         self.file_data = ''
 
     def read_node(self, index):
@@ -110,9 +111,17 @@ class RARCFile:
 
     def insert_string(self, string):
         '''Return (offset, hash) of string inserted into table'''
+
+        try:
+            return self.string_lookup[string]
+        except KeyError:
+            pass
+
         hashed = hash_string(string)
         offset = len(self.string_table)
         self.string_table += string + '\x00'
+
+        self.string_lookup[string] = (offset, hashed)
 
         return (offset, hashed)
 
@@ -192,6 +201,8 @@ class RARCFile:
         in_path = in_path.rstrip('/\\')
         print 'root directory: %s' % (os.path.basename(in_path))
 
+        self.insert_string('.')
+        self.insert_string('..')
         self.insert_node(in_path, 'ROOT')
 
         # Header and info block
@@ -245,15 +256,11 @@ class RARCFile:
         # Node entries
         node.firstEntryIndex = len(self.file_entries)
 
-        # ROOT node: insert '.' and '..' links
-        if node_type == 'ROOT':
-            self.insert_file('.', node_link=node_index)
-            self.insert_file('..', node_link=0xFFFFFFFF)
-
         (node.filenameOffset,
          node.filenameHash) = self.insert_string(node.name)
 
         dir_list = sorted(os.listdir(node_path))
+        subdir_files = []
         for filename in dir_list:
             if filename in ['.', '..']:
                 continue
@@ -262,9 +269,9 @@ class RARCFile:
 
             # Insert sub-directory node
             if os.path.isdir(full_filename):
-                sub_node_index = self.insert_node(full_filename, 'DATA',
-                                                  parent_index=node_index)
-                self.insert_file(full_filename, node_link=sub_node_index)
+                subdir_file_index = self.insert_file(full_filename,
+                                                     node_link=0xBEEF)
+                subdir_files.append(subdir_file_index)
             # Insert file
             else:
                 print 'insert file "%s"' % (full_filename)
@@ -272,9 +279,22 @@ class RARCFile:
 
             node.numFileEntries += 1
 
-        if node_type == 'ROOT':
-            # two more for the '.' and '..' links
-            node.numFileEntries += 2
+        # insert '.' and '..' links
+        if parent_index is None:
+            parent_index = 0xFFFFFFFF
+
+        self.insert_file('.', node_link=node_index)
+        self.insert_file('..', node_link=parent_index)
+        node.numFileEntries += 2
+
+        for subdir_file_index in subdir_files:
+            subdir_entry = self.file_entries[subdir_file_index]
+            full_filename = os.path.join(node_path, subdir_entry.name)
+
+            sub_node_index = self.insert_node(full_filename,
+                                              'DATA',
+                                              parent_index=node_index)
+            subdir_entry.dataOffset = sub_node_index
 
         return node_index
 
