@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import binascii
 import struct
 import sys
 import os
@@ -90,8 +89,8 @@ def unyaz(input, output):
 
 
 def unrarc(i, outputPath):
-    global listMode, verbose
-    rarc_file = RARCFile(list_mode=listMode, verbose=verbose)
+    global quiet, listMode, verbose
+    rarc_file = RARCFile(quiet=quiet, list_mode=listMode, verbose=verbose)
     rarc_file.unpack(i, outputPath)
 
 
@@ -199,6 +198,7 @@ def main():
                       help="print a list of files contained in the specified archive (ignores -q)")
     parser.add_option("-v", "--verbose", action="store_true", dest="verbose",
                       default=False)
+    parser.add_option("--pack", action="store", type="string", dest="outarchive")
 
     (options, args) = parser.parse_args()
 
@@ -216,6 +216,12 @@ def main():
         if options.of is not None:
             makedir(of)
             os.chdir(of)
+
+    if options.outarchive is not None:
+        print 'creating archive %s' % (options.outarchive)
+        rarc_file = RARCFile()
+        rarc_file.pack(args[0], options.outarchive)
+        exit()
 
     for inFile in args:
         if options.of is None or len(args) > 1:
@@ -235,6 +241,7 @@ def main():
         elif type == "RARC":
             if not quiet:
                 print "RARC archive"
+            f.seek(0)
             unrarc(f, of)
         elif type == "U\xAA8-":
             if not quiet:
