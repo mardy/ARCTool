@@ -219,7 +219,7 @@ def main():
 
     if options.outarchive is not None:
         print 'creating archive %s' % (options.outarchive)
-        rarc_file = RARCFile()
+        rarc_file = RARCFile(verbose=verbose, quiet=quiet, list_mode=listMode)
         rarc_file.pack(args[0], options.outarchive)
         exit()
 

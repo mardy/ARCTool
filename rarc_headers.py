@@ -25,6 +25,13 @@ def hash_string(string):
     return result
 
 
+def next_boundary(offset):
+    while offset % 0x20 != 0:
+        offset += 1
+
+    return offset
+
+
 class RARCFile:
 
     def __init__(self, quiet=False, list_mode=False, verbose=False):
@@ -207,6 +214,8 @@ class RARCFile:
 
         # Header and info block
         self.update_header()
+        if self.verbose:
+            print self.header
 
         self.out_file.write(self.header.pack())
         self.out_file.write(self.info_block.pack())
@@ -214,13 +223,16 @@ class RARCFile:
         # Nodes
         for node in self.nodes:
             self.out_file.write(node.pack())
+        self.pad_to_boundary()
 
         # File entries
         for file_entry in self.file_entries:
             self.out_file.write(file_entry.pack())
+        self.pad_to_boundary()
 
         # String table
         self.out_file.write(self.string_table)
+        self.pad_to_boundary()
 
         # File data
         self.out_file.write(self.file_data)
@@ -287,6 +299,7 @@ class RARCFile:
         self.insert_file('..', node_link=parent_index)
         node.numFileEntries += 2
 
+        # Insert subdirectory nodes and update file entry links
         for subdir_file_index in subdir_files:
             subdir_entry = self.file_entries[subdir_file_index]
             full_filename = os.path.join(node_path, subdir_entry.name)
@@ -326,28 +339,40 @@ class RARCFile:
             file_handle.close()
 
             file_entry.dataSize = len(file_contents)
-            file_entry.dataOffset = len(self.file_data)
-            self.file_data += file_contents
+            file_entry.dataOffset = self.insert_file_data(file_contents)
 
         return file_index
 
+    def insert_file_data(self, data):
+        offset = len(self.file_data)
+        end = offset + len(data)
+        padding = '\x00' * (next_boundary(end) - end)
+        self.file_data += data + padding
+        return offset
+
     def update_info_block(self):
         self.info_block.numNodes = len(self.nodes)
-        self.info_block.nodeEntriesOffset = self.info_block.size()
+        self.info_block.nodeEntriesOffset = next_boundary(
+            self.info_block.size()
+        )
 
         self.info_block.numEntries = len(self.file_entries)
-        self.info_block.fileEntriesOffset = \
-            self.info_block.nodeEntriesOffset + \
+        self.info_block.fileEntriesOffset = next_boundary(
+            self.info_block.nodeEntriesOffset +
             (RARCNode().size() * self.info_block.numNodes)
+        )
 
-        self.info_block.stringTableLength = len(self.string_table)
-        self.info_block.stringTableOffset = \
-            self.info_block.fileEntriesOffset + \
+        self.info_block.stringTableLength = next_boundary(len(self.string_table))
+        self.info_block.stringTableOffset = next_boundary(
+            self.info_block.fileEntriesOffset +
             (RARCFileEntry().size() * self.info_block.numEntries)
+        )
 
         # number of file entries that are files, not directories
         # though in some RARCs this is the same as # of entries
         self.info_block.numFiles = self.info_block.numEntries
+
+        self.info_block.unknown10 = 0x0100
 
     def update_header(self):
         self.update_info_block()
@@ -355,13 +380,26 @@ class RARCFile:
         self.header.dataLength = len(self.file_data)
         self.header.dataLength2 = self.header.dataLength
 
-        self.header.dataOffset = \
-            self.info_block.stringTableOffset + \
+        self.header.dataOffset = next_boundary(
+            self.info_block.stringTableOffset +
             self.info_block.stringTableLength
+        )
 
         self.header.fileSize = \
+            self.header.size() + \
             self.header.dataOffset + \
             self.header.dataLength
+
+    def pad_to_boundary(self, target=None):
+        cur_pos = self.out_file.tell()
+
+        if target is not None:
+            next_pos = target
+        else:
+            next_pos = next_boundary(cur_pos)
+
+        zero_pad = '\x00' * (next_pos - cur_pos)
+        self.out_file.write(zero_pad)
 
 
 class RARCHeader(BaseHeader):
