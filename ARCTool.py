@@ -185,11 +185,15 @@ def unu8(i, o):
 
 def main():
     global quiet, listMode, depthnum, verbose
-    parser = OptionParser(usage="python %prog [-q] [-o <output>] <inputfile> [inputfile2] ... [inputfileN]", version="ARCTool 0.3b")
+    parser = OptionParser(
+        usage="python %prog [-q] [-o <output>] <inputfile> [inputfile2] ... [inputfileN]",
+        version="ARCTool 0.3b")
     parser.add_option("-o", "--output", action="store", type="string",
                       dest="of",
-                      help="write output to FILE/DIR. If you are extracting multiple archives, all of them will be put in this dir.",
+                      help="Extract and write output to FILE/DIR. If you are extracting multiple archives, all of them will be put in this dir.",
                       metavar="FILE/DIR")
+    parser.add_option("--pack", action="store", type="string", dest="outarchive",
+                      help="Create ARC containing input files (given directory is placed in root)")
     parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
                       default=False,
                       help="don't print anything (except errors)")
@@ -198,7 +202,6 @@ def main():
                       help="print a list of files contained in the specified archive (ignores -q)")
     parser.add_option("-v", "--verbose", action="store_true", dest="verbose",
                       default=False)
-    parser.add_option("--pack", action="store", type="string", dest="outarchive")
 
     (options, args) = parser.parse_args()
 
