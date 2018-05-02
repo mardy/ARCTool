@@ -1,8 +1,8 @@
 #!/usr/bin/env python
+import argparse
+import os
 import struct
 import sys
-import os
-from optparse import OptionParser
 from rarc_headers import (RARCFile, RARCHeader,
                           RARCInfoBlock, RARCNode, RARCFileEntry)
 from u8_headers import (U8ArchiveHeader, U8Node, U8Globals)
@@ -185,51 +185,46 @@ def unu8(i, o):
 
 def main():
     global quiet, listMode, depthnum, verbose
-    parser = OptionParser(
-        usage="python %prog [-q] [-o <output>] <inputfile> [inputfile2] ... [inputfileN]",
-        version="ARCTool 0.3b")
-    parser.add_option("-o", "--output", action="store", type="string",
-                      dest="of",
-                      help="Extract and write output to FILE/DIR. If you are extracting multiple archives, all of them will be put in this dir.",
-                      metavar="FILE/DIR")
-    parser.add_option("--pack", action="store", type="string", dest="outarchive",
-                      help="Create ARC containing input files (given directory is placed in root)")
-    parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
-                      default=False,
-                      help="don't print anything (except errors)")
-    parser.add_option("-l", "--list", action="store_true", dest="listMode",
-                      default=False,
-                      help="print a list of files contained in the specified archive (ignores -q)")
-    parser.add_option("-v", "--verbose", action="store_true", dest="verbose",
-                      default=False)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-e", "--extract",
+                        help="Extract and write output to FILE/DIR. If you are extracting multiple archives, all of them will be put in this dir.")
+    parser.add_argument("-p", "--pack",
+                        help="Create ARC containing input files (given directory is placed in root)")
+    parser.add_argument("-q", "--quiet", action="store_true", default=False,
+                        help="don't print anything (except errors)")
+    parser.add_argument("-l", "--list", action="store_true", default=False,
+                        help="print a list of files contained in the specified archive (ignores -q)")
+    parser.add_argument("-v", "--verbose", action="store_true", default=False)
+    parser.add_argument("inputfile", nargs='+', help='input files')
 
-    (options, args) = parser.parse_args()
+    args = parser.parse_args()
 
-    of = options.of
-    quiet = options.quiet
-    listMode = options.listMode
-    verbose = options.verbose
+    of = args.extract
+    quiet = args.quiet
+    listMode = args.list
+    verbose = args.verbose
 
     depthnum = 0
 
-    if len(args) < 1:
+    if len(args.inputfile) < 1:
         parser.error("Input filename required")
 
-    if len(args) > 1:
-        if options.of is not None:
+    if len(args.inputfile) > 1:
+        if of is not None:
             makedir(of)
             os.chdir(of)
 
-    if options.outarchive is not None:
-        print 'creating archive %s' % (options.outarchive)
+    if args.pack is not None:
+        print 'creating archive %s' % (args.pack)
         rarc_file = RARCFile(verbose=verbose, quiet=quiet, list_mode=listMode)
-        rarc_file.pack(args[0], options.outarchive)
+        rarc_file.pack(args.inputfile[0], args.pack)
         exit()
 
-    for inFile in args:
-        if options.of is None or len(args) > 1:
+    for inFile in args.inputfile:
+        print inFile
+        if of is None or len(args.inputfile) > 1:
             of = os.path.split(inFile)[1] + ".extracted"
-        if len(args) > 1 and options.of is not None:
+        if len(args.inputfile) > 1 and of is not None:
             inFile = "../" + inFile
         try:
             f = open(inFile, "rb")
