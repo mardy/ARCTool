@@ -1,5 +1,9 @@
 CHANGELOG
 
+v0.4:
+    Added ARC repacking. Now use `-e` to extract an archive and `-p` to pack
+    a directory of files into a new archive.
+
 v0.3b:
 	Fixed a bug with RARC extraction where it would improperly detect . and .. entries and either skip directories or recurse infinitely. (Again, my test archives decieved me!)
 	Added the -l option which lists the contents of the archive without extracting them.
