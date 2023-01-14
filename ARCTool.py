@@ -158,7 +158,7 @@ def unu8(i, o):
                             sys.stdout.write("\b\b" + str(calcpercent) + "%")
                             sys.stdout.flush()
                             percent = calcpercent
-                    dest.write(f.read(size))
+                    dest.write(i.read(size))
                     size -= 1024
                 if not quiet:
                     if percent > 9:
