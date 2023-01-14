@@ -7,8 +7,8 @@ from header import BaseHeader
 def makedir(dirname):
     try:
         os.mkdir(dirname)
-    except OSError, e:
-        print e
+    except OSError as e:
+        print(e)
 
 
 def hash_string(string):
@@ -60,9 +60,9 @@ class RARCFile:
 
         node.name = self.read_string(node.filenameOffset)
         if hash_string(node.name) != node.filenameHash:
-            print 'WARNING: Incorrect hash for "%s"' % (node.name)
-            print '%u != %u' % (hash_string(node.name),
-                                node.filenameHash)
+            print('WARNING: Incorrect hash for "%s"' % (node.name))
+            print('%u != %u' % (hash_string(node.name),
+                                node.filenameHash))
 
         return node
 
@@ -79,9 +79,9 @@ class RARCFile:
 
         file_ent.name = self.read_string(file_ent.filenameOffset)
         if hash_string(file_ent.name) != file_ent.filenameHash:
-            print 'WARNING: Incorrect hash for "%s"' % (file_ent.name)
-            print '%u != %u' % (hash_string(file_ent.name),
-                                file_ent.filenameHash)
+            print('WARNING: Incorrect hash for "%s"' % (file_ent.name))
+            print('%u != %u' % (hash_string(file_ent.name),
+                                file_ent.filenameHash))
 
         return file_ent
 
@@ -135,22 +135,22 @@ class RARCFile:
     def process_node(self, node, depth=0):
         '''Traverse a node, extracting subdirectories and files'''
         if self.verbose:
-            print node
+            print(node)
 
         if not self.list_mode:
             if not self.quiet:
-                print 'Processing node "%s"' % (node.name)
+                print('Processing node "%s"' % (node.name))
             makedir(node.name)
             os.chdir(node.name)
         else:
-            print '%s%s/' % (' ' * depth, node.name)
+            print('%s%s/' % (' ' * depth, node.name))
 
         for i in range(node.numFileEntries):
             cur_file = self.read_file_entry(node.firstEntryIndex + i)
 
             if self.verbose:
-                print cur_file
-                print 'filename: %s' % (cur_file.name)
+                print(cur_file)
+                print('filename: %s' % (cur_file.name))
 
             # process subdirectory
             if cur_file.id == 0xFFFF:
@@ -162,9 +162,9 @@ class RARCFile:
             # process file
             else:
                 if self.list_mode:
-                    print '%s%s - %u' % (' ' * (depth + 1),
+                    print('%s%s - %u' % (' ' * (depth + 1),
                                          cur_file.name,
-                                         cur_file.dataSize)
+                                         cur_file.dataSize))
                 else:
                     # if not self.quiet:
                     #     print 'Dumping %s/%s' % (node.name, cur_file.name)
@@ -184,8 +184,8 @@ class RARCFile:
         self.info_block.unpack(in_file.read(self.info_block.size()))
 
         if self.verbose:
-            print self.header
-            print self.info_block
+            print(self.header)
+            print(self.info_block)
 
         if not self.list_mode:
             try:
@@ -199,14 +199,14 @@ class RARCFile:
             cur_node = self.read_node(i)
 
             if cur_node.typeString == 'ROOT':
-                print 'root node "%s"' % (cur_node.name)
+                print('root node "%s"' % (cur_node.name))
                 self.process_node(cur_node)
 
     def pack(self, in_path, out_path):
         self.out_file = open(out_path, 'wb')
 
         in_path = in_path.rstrip('/\\')
-        print 'root directory: %s' % (os.path.basename(in_path))
+        print('root directory: %s' % (os.path.basename(in_path)))
 
         self.insert_string('.')
         self.insert_string('..')
@@ -215,7 +215,7 @@ class RARCFile:
         # Header and info block
         self.update_header()
         if self.verbose:
-            print self.header
+            print(self.header)
 
         self.out_file.write(self.header.pack())
         self.out_file.write(self.info_block.pack())
@@ -247,7 +247,7 @@ class RARCFile:
         node.name = os.path.basename(node_path)
 
         if not self.quiet:
-            print 'inserting node "%s/"' % (node.name)
+            print('inserting node "%s/"' % (node.name))
 
         # Get index for current node and then insert it
         node_index = len(self.nodes)
@@ -286,7 +286,7 @@ class RARCFile:
                 subdir_files.append(subdir_file_index)
             # Insert file
             else:
-                print 'insert file "%s"' % (full_filename)
+                print('insert file "%s"' % (full_filename))
                 self.insert_file(full_filename)
 
             node.numFileEntries += 1
